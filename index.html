@@ -1749,6 +1749,7 @@
         let currentPage = 1;
         let currentMonth = new Date().getMonth();
         let currentYear = new Date().getFullYear();
+        const CONTACT_RECEIVER_EMAIL = 'jeevunjeefamily@gmail.com';
 
         // ===== INITIALIZATION =====
         function initializeData() {
@@ -1761,9 +1762,7 @@
             if (!localStorage.getItem('contactMessages')) {
                 localStorage.setItem('contactMessages', JSON.stringify([]));
             }
-            if (!localStorage.getItem('notificationEmail')) {
-                localStorage.setItem('notificationEmail', 'jeevunjeefamily@gmail.com');
-            }
+            localStorage.setItem('notificationEmail', CONTACT_RECEIVER_EMAIL);
             loadGallery();
             renderCalendar();
             updateMonthYear();
@@ -2258,13 +2257,15 @@
         });
 
         // ===== CONTACT =====
-        function handleSubmit(event) {
+        async function handleSubmit(event) {
             event.preventDefault();
             
             const form = event.target;
             const name = form.querySelector('input[placeholder="Your Name"]').value;
             const email = form.querySelector('input[placeholder="Your Email"]').value;
             const message = form.querySelector('textarea').value;
+            const submittedAt = new Date();
+            const humanDate = submittedAt.toLocaleDateString() + ' ' + submittedAt.toLocaleTimeString();
 
             // Store the message
             const messages = JSON.parse(localStorage.getItem('contactMessages') || '[]');
@@ -2273,13 +2274,47 @@
                 name: name,
                 email: email,
                 message: message,
-                date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString(),
+                date: humanDate,
                 timestamp: Date.now()
             });
             localStorage.setItem('contactMessages', JSON.stringify(messages));
 
-            showNotification('Thank you! We\'ll be in touch soon.');
-            form.reset();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Sending...';
+            }
+
+            try {
+                const response = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(CONTACT_RECEIVER_EMAIL)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        message: message,
+                        _subject: `New Jeevunjee Family contact message from ${name}`,
+                        submitted_at: humanDate
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Message relay failed');
+                }
+
+                showNotification('Thank you! Your message was sent successfully.');
+                form.reset();
+            } catch (error) {
+                showNotification('Message saved, but email delivery failed. Please try again.');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Send Message';
+                }
+            }
         }
 
         // ===== UTILITIES =====
@@ -2456,15 +2491,20 @@
                 showNotification('Please enter an email address');
                 return;
             }
-            
-            localStorage.setItem('notificationEmail', newEmail);
-            document.getElementById('currentEmail').textContent = newEmail;
+
+            if (newEmail.toLowerCase() !== CONTACT_RECEIVER_EMAIL) {
+                showNotification(`Recipient is locked to ${CONTACT_RECEIVER_EMAIL}`);
+                return;
+            }
+
+            localStorage.setItem('notificationEmail', CONTACT_RECEIVER_EMAIL);
+            document.getElementById('currentEmail').textContent = CONTACT_RECEIVER_EMAIL;
             document.getElementById('emailAddress').value = '';
-            showNotification('Email address updated!');
+            showNotification('Recipient email verified.');
         }
 
         function getNotificationEmail() {
-            return localStorage.getItem('notificationEmail') || 'jeevunjeefamily@gmail.com';
+            return CONTACT_RECEIVER_EMAIL;
         }
 
         function initializeEmailSettings() {
